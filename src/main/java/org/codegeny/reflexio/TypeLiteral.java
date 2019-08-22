@@ -3,6 +3,13 @@ package org.codegeny.reflexio;
 import java.lang.reflect.Type;
 import java.util.Objects;
 
+/**
+ * Class used to <em>capture</em>capture a type literal. To capture a type literal, this class should be extended and
+ * parameterized with the correct type.
+ *
+ * @param <T> The type to capture.
+ * @author Xavier DURY
+ */
 public abstract class TypeLiteral<T> {
 
     private final Type type;
@@ -18,16 +25,6 @@ public abstract class TypeLiteral<T> {
     @SuppressWarnings("unchecked")
     public final T cast(Object object) {
         return (T) object;
-    }
-
-    @Override
-    public final boolean equals(Object that) {
-        return super.equals(that) || that instanceof TypeLiteral<?> && type.equals(((TypeLiteral<?>) that).type);
-    }
-
-    @Override
-    public final int hashCode() {
-        return type.hashCode();
     }
 
     @Override

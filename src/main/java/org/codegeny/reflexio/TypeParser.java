@@ -10,6 +10,8 @@ import java.util.regex.Pattern;
  * Parser for java type names. Does not support {@link java.lang.reflect.TypeVariable}s which need a
  * {@link java.lang.reflect.GenericDeclaration} (which cannot be represented in the string) and because they are
  * indistinguishable from other types in a string form.
+ *
+ * @author Xavier DURY
  */
 public final class TypeParser {
 
@@ -67,7 +69,7 @@ public final class TypeParser {
         return Types.newParameterizedType(type, null, types.toArray(EMPTY_TYPE_ARRAY));
     }
 
-    private Type parseArrayType(Type type, Scanner scanner) throws ClassNotFoundException {
+    private Type parseArrayType(Type type, Scanner scanner) {
         int dimension = 0;
         while (Token.ARRAY_SQUARE_BRACKETS.matches(scanner)) {
             dimension++;

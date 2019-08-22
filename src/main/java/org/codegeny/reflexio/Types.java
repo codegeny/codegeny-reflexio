@@ -185,6 +185,8 @@ public final class Types {
 
     private static class WildcardTypeImpl implements WildcardType {
 
+        private static final  Type[] DEFAULT_UPPER_BOUNDS = new Type[] {Object.class};
+
         private final Type[] lowerBounds;
         private final Type[] upperBounds;
 
@@ -195,7 +197,7 @@ public final class Types {
 
         @Override
         public Type[] getUpperBounds() {
-            return upperBounds;
+            return upperBounds.length == 0 ? DEFAULT_UPPER_BOUNDS : upperBounds;
         }
 
         @Override
@@ -209,12 +211,12 @@ public final class Types {
         }
 
         private boolean equals(WildcardType that) {
-            return Arrays.equals(lowerBounds, that.getLowerBounds()) && Arrays.equals(upperBounds, that.getUpperBounds());
+            return Arrays.equals(getLowerBounds(), that.getLowerBounds()) && Arrays.equals(getUpperBounds(), that.getUpperBounds());
         }
 
         @Override
         public int hashCode() {
-            return Arrays.hashCode(lowerBounds) ^ Arrays.hashCode(upperBounds);
+            return Arrays.hashCode(getLowerBounds()) ^ Arrays.hashCode(getUpperBounds());
         }
 
         @Override
@@ -277,7 +279,7 @@ public final class Types {
 
         @Override
         public String toString() {
-            return rawType.getTypeName().concat(Stream.of(getActualTypeArguments()).map(Type::getTypeName).collect(Collectors.joining(",", "<", ">")));
+            return rawType.getTypeName().concat(Stream.of(getActualTypeArguments()).map(Type::getTypeName).collect(Collectors.joining(", ", "<", ">")));
         }
     }
 
@@ -305,7 +307,7 @@ public final class Types {
 
         @Override
         public int hashCode() {
-            return Objects.hash(component);
+            return Objects.hashCode(component);
         }
 
         @Override

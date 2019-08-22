@@ -9,6 +9,12 @@ import java.lang.reflect.WildcardType;
 import java.util.function.IntFunction;
 import java.util.stream.Stream;
 
+/**
+ * Visitor for {@link Type}s.
+ *
+ * @param <R> The result type of the visitor.
+ * @author Xavier DURY
+ */
 public interface TypeVisitor<R> {
 
     default <T> R visitClass(Class<T> klass) {
