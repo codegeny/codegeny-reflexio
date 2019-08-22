@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.io.Serializable;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.TypeVariable;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import static org.codegeny.reflexio.Types.methodTypeVariable;
@@ -30,5 +31,10 @@ public class RawClassResolverTest {
         Assertions.assertEquals(Object.class, Types.raw(((ParameterizedType) RawClassResolverTest.class.getField("x").getGenericType()).getActualTypeArguments()[0]));
         Assertions.assertEquals(Serializable.class, Types.raw(((ParameterizedType) RawClassResolverTest.class.getField("y").getGenericType()).getActualTypeArguments()[0]));
 
+    }
+
+    @Test
+    public void test2() throws ClassNotFoundException {
+        Assertions.assertEquals(Set[][][].class, Types.raw(TypeParser.newInstance().parseType("java.util.Set<?>[][][]")));
     }
 }

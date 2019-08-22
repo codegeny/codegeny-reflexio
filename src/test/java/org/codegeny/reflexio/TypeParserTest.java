@@ -9,7 +9,6 @@ public class TypeParserTest {
 
     @Test
     public void test() throws ClassNotFoundException {
-        System.out.println(String[].class.getName());
         parse("byte");
         parse("byte[][][]");
         parse("java.lang.Object");

@@ -70,11 +70,11 @@ public final class TypeParser {
     }
 
     private Type parseArrayType(Type type, Scanner scanner) {
-        int dimension = 0;
+        int rank = 0;
         while (Token.ARRAY_SQUARE_BRACKETS.matches(scanner)) {
-            dimension++;
+            rank++;
         }
-        return Types.arrayType(type, dimension);
+        return Types.arrayType(type, rank);
     }
 
     private static final Type[] EMPTY_TYPE_ARRAY = new Type[0];

@@ -1,12 +1,10 @@
 package org.codegeny.reflexio;
 
-import java.lang.reflect.Array;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.GenericDeclaration;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
-import java.util.Arrays;
 
 enum RawClassResolver implements TypeVisitor<Class<?>> {
 
@@ -24,7 +22,7 @@ enum RawClassResolver implements TypeVisitor<Class<?>> {
 
     @Override
     public Class<?> visitGenericArrayType(GenericArrayType genericArrayType) {
-        return Array.newInstance(TypeVisitor.accept(this, genericArrayType.getGenericComponentType()), 0).getClass();
+        return TypeVisitor.accept(this, Types.arrayType(TypeVisitor.accept(this, genericArrayType.getGenericComponentType())));
     }
 
     @Override

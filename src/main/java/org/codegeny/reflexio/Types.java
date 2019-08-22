@@ -150,17 +150,29 @@ public final class Types {
         }
     }
 
-    public static Type arrayType(Type component, int dimension) {
-        if (dimension < 0) {
-            throw new IllegalArgumentException("Array dimension must be positive");
+    public static Type arrayType(Type component) {
+        return arrayType(component, 1);
+    }
+
+    /**
+     * Convert the given component type to an array type.
+     * A rank 0 returns the component as is, a rank 1 returns a component[], a rank 2 returns a component[][]...
+     *
+     * @param component The component type.
+     * @param rank      The rank.
+     * @return An array type of the given component type.
+     */
+    public static Type arrayType(Type component, int rank) {
+        if (rank < 0) {
+            throw new IllegalArgumentException("Rank must be positive");
         }
-        if (dimension == 0) {
+        if (rank == 0) {
             return component;
         }
         if (component instanceof Class<?>) {
             Class<?> klass = (Class<?>) component;
             StringBuilder builder = new StringBuilder();
-            while (dimension-- > 0) {
+            while (rank-- > 0) {
                 builder.append('[');
             }
             if (klass.isArray()) {
@@ -176,7 +188,7 @@ public final class Types {
                 throw new InternalError("Loading an array class from an already loaded component class should not fail", e);
             }
         }
-        return arrayType(newGenericArrayType(component), dimension - 1);
+        return arrayType(newGenericArrayType(component), rank - 1);
     }
 
     public static WildcardType newWildcardType(Type[] lowerBounds, Type[] upperBounds) {
@@ -185,7 +197,7 @@ public final class Types {
 
     private static class WildcardTypeImpl implements WildcardType {
 
-        private static final  Type[] DEFAULT_UPPER_BOUNDS = new Type[] {Object.class};
+        private static final Type[] DEFAULT_UPPER_BOUNDS = new Type[]{Object.class};
 
         private final Type[] lowerBounds;
         private final Type[] upperBounds;
