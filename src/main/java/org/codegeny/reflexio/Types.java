@@ -9,6 +9,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
+import java.net.Proxy;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -62,6 +63,10 @@ public final class Types {
         return newParameterizedType(reference, null, resolveTypeArguments(type, reference));
     }
 
+    public static ParameterizedType asParameterizedType(Class<?> reference) {
+        return findParameterizedType(reference, reference);
+    }
+
     public static Type[] resolveTypeArguments(Type type, Class<?> reference) {
         return TypeVisitor.accept(new ArgumentTypesResolver(reference), type);
     }
@@ -71,7 +76,12 @@ public final class Types {
     }
 
     public static boolean isAssignable(Type left, Type right) {
-        return Boolean.TRUE.equals(TypeVisitor.accept(TypeVisitor.accept(AssignabilityTypeVisitor.INSTANCE, left), right));
+        Map<TypeVariable<?>, Type> captures = new HashMap<>();
+        return isAssignable(left, right, captures) && captures.isEmpty();
+    }
+
+    public static boolean isAssignable(Type left, Type right, Map<TypeVariable<?>, Type> captures) {
+        return Boolean.TRUE.equals(TypeVisitor.accept(new AssignabilityTypeVisitor(right, captures), left));
     }
 
     public static Class<?> raw(Type type) {
@@ -195,6 +205,8 @@ public final class Types {
         return new WildcardTypeImpl(lowerBounds, upperBounds);
     }
 
+    public static final WildcardType WILDCARD = newWildcardType(new Type[0], new Type[0]);
+
     private static class WildcardTypeImpl implements WildcardType {
 
         private static final Type[] DEFAULT_UPPER_BOUNDS = new Type[]{Object.class};
@@ -237,7 +249,7 @@ public final class Types {
             if (lowerBounds.length > 0) {
                 builder.append(" super ").append(Stream.of(lowerBounds).map(Type::getTypeName).collect(Collectors.joining(", ")));
             }
-            if (upperBounds.length > 0) {
+            if (upperBounds.length > 0 && !Arrays.equals(upperBounds, DEFAULT_UPPER_BOUNDS)) {
                 builder.append(" extends ").append(Stream.of(upperBounds).map(Type::getTypeName).collect(Collectors.joining(", ")));
             }
             return builder.toString();

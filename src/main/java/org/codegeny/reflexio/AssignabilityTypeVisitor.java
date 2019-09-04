@@ -6,14 +6,50 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
+import java.util.Map;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-enum AssignabilityTypeVisitor implements TypeVisitor<TypeVisitor<Boolean>> {
+class AssignabilityTypeVisitor implements TypeVisitor<Boolean> {
 
-    INSTANCE;
+    private final Type right;
+    private final Map<TypeVariable<?>, Type> captures;
 
-    private static class ClassAssignabilityTypeVisitor<K> implements TypeVisitor<Boolean> {
+    AssignabilityTypeVisitor(Type right, Map<TypeVariable<?>, Type> captures) {
+        this.right = right;
+        this.captures = captures;
+    }
+
+    @Override
+    public <T> Boolean visitClass(Class<T> left) {
+        return TypeVisitor.accept(new ClassAssignabilityTypeVisitor<>(left), right);
+    }
+
+    @Override
+    public Boolean visitParameterizedType(ParameterizedType left) {
+        return TypeVisitor.accept(new ParameterizedTypeAssignabilityTypeVisitor(left), right);
+    }
+
+    @Override
+    public Boolean visitGenericArrayType(GenericArrayType left) {
+        return TypeVisitor.accept(new GenericArrayTypeAssignabilityTypeVisitor(left), right);
+    }
+
+    @Override
+    public Boolean visitWildcardType(WildcardType left) {
+        return TypeVisitor.accept(new WildcardTypeAssignabilityTypeVisitor(left), right);
+    }
+
+    @Override
+    public <D extends GenericDeclaration> Boolean visitTypeVariable(TypeVariable<D> left) {
+        return TypeVisitor.accept(new TypeVariableAssignabilityTypeVisitor<>(left), right);
+    }
+
+    private Boolean isAssignable(Type left, Type right) {
+        return Types.isAssignable(left, right, captures);
+    }
+
+    private class ClassAssignabilityTypeVisitor<K> implements TypeVisitor<Boolean> {
 
         private final Class<K> left;
 
@@ -33,22 +69,26 @@ enum AssignabilityTypeVisitor implements TypeVisitor<TypeVisitor<Boolean>> {
 
         @Override
         public <D extends GenericDeclaration> Boolean visitTypeVariable(TypeVariable<D> right) {
+            Type captured = captures.get(right);
+            if (captured != null) {
+                return left.equals(captured);
+            }
             return Stream.of(right.getBounds()).allMatch(t -> TypeVisitor.accept(this, t));
         }
 
         @Override
         public Boolean visitGenericArrayType(GenericArrayType right) {
-            return left.isArray() && Types.isAssignable(left.getComponentType(), right.getGenericComponentType());
+            return left.isArray() && isAssignable(left.getComponentType(), right.getGenericComponentType());
         }
 
         @Override
         public Boolean visitWildcardType(WildcardType right) {
-            return Stream.of(right.getLowerBounds()).allMatch(b -> Types.isAssignable(b, left))
-                    && Stream.of(right.getUpperBounds()).allMatch(b -> Types.isAssignable(left, b));
+            return Stream.of(right.getLowerBounds()).allMatch(b -> isAssignable(b, left))
+                    && Stream.of(right.getUpperBounds()).allMatch(b -> isAssignable(left, b));
         }
     }
 
-    private static class ParameterizedTypeAssignabilityTypeVisitor implements TypeVisitor<Boolean> {
+    private class ParameterizedTypeAssignabilityTypeVisitor implements TypeVisitor<Boolean> {
 
         private final ParameterizedType left;
 
@@ -58,13 +98,18 @@ enum AssignabilityTypeVisitor implements TypeVisitor<TypeVisitor<Boolean>> {
 
         @Override
         public <T> Boolean visitClass(Class<T> right) {
-            return Types.isAssignable(left.getRawType(), right);
+            try {
+                return isAssignable(left, Types.findParameterizedType(right, (Class<?>) left.getRawType()));
+            } catch (IllegalArgumentException iae) {
+                // TODO IMPROVE THIS
+                return false;
+            }
         }
 
         @Override
         public Boolean visitParameterizedType(ParameterizedType right) {
 
-            if (!Types.isAssignable(left.getRawType(), right.getRawType())) {
+            if (!isAssignable(left.getRawType(), right.getRawType())) {
                 return false;
             }
 
@@ -75,12 +120,12 @@ enum AssignabilityTypeVisitor implements TypeVisitor<TypeVisitor<Boolean>> {
                 throw new InternalError();
             }
 
-            return IntStream.range(0, rightArguments.length).allMatch(i -> Types.isAssignable(leftArguments[i], rightArguments[i]));
+            return IntStream.range(0, rightArguments.length).allMatch(i -> isAssignable(leftArguments[i], rightArguments[i]));
         }
 
         @Override
         public <D extends GenericDeclaration> Boolean visitTypeVariable(TypeVariable<D> right) {
-            return Stream.of(right.getBounds()).allMatch(b -> Types.isAssignable(left, b));
+            return Stream.of(right.getBounds()).allMatch(b -> isAssignable(left, b));
         }
 
         @Override
@@ -90,12 +135,12 @@ enum AssignabilityTypeVisitor implements TypeVisitor<TypeVisitor<Boolean>> {
 
         @Override
         public Boolean visitWildcardType(WildcardType right) {
-            return Stream.of(right.getLowerBounds()).allMatch(b -> Types.isAssignable(b, left))
-                    && Stream.of(right.getUpperBounds()).allMatch(b -> Types.isAssignable(left, b));
+            return Stream.of(right.getLowerBounds()).allMatch(b -> isAssignable(b, left))
+                    && Stream.of(right.getUpperBounds()).allMatch(b -> isAssignable(left, b));
         }
     }
 
-    private static class GenericArrayTypeAssignabilityTypeVisitor implements TypeVisitor<Boolean> {
+    private class GenericArrayTypeAssignabilityTypeVisitor implements TypeVisitor<Boolean> {
 
         private final GenericArrayType left;
 
@@ -105,12 +150,12 @@ enum AssignabilityTypeVisitor implements TypeVisitor<TypeVisitor<Boolean>> {
 
         @Override
         public <T> Boolean visitClass(Class<T> klass) {
-            return klass.isArray() && Types.isAssignable(left.getGenericComponentType(), klass.getComponentType());
+            return klass.isArray() && isAssignable(left.getGenericComponentType(), klass.getComponentType());
         }
 
         @Override
         public Boolean visitGenericArrayType(GenericArrayType right) {
-            return Types.isAssignable(left.getGenericComponentType(), right.getGenericComponentType());
+            return isAssignable(left.getGenericComponentType(), right.getGenericComponentType());
         }
 
         @Override
@@ -129,7 +174,7 @@ enum AssignabilityTypeVisitor implements TypeVisitor<TypeVisitor<Boolean>> {
         }
     }
 
-    private static class WildcardTypeAssignabilityTypeVisitor implements TypeVisitor<Boolean> {
+    private class WildcardTypeAssignabilityTypeVisitor implements TypeVisitor<Boolean> {
 
         private final WildcardType left;
 
@@ -139,8 +184,8 @@ enum AssignabilityTypeVisitor implements TypeVisitor<TypeVisitor<Boolean>> {
 
         @Override
         public <T> Boolean visitClass(Class<T> right) {
-            return Stream.of(left.getLowerBounds()).allMatch(b -> Types.isAssignable(right, b))
-                    && Stream.of(left.getUpperBounds()).allMatch(b -> Types.isAssignable(b, right));
+            return Stream.of(left.getLowerBounds()).allMatch(b -> isAssignable(right, b))
+                    && Stream.of(left.getUpperBounds()).allMatch(b -> isAssignable(b, right));
         }
 
         @Override
@@ -150,18 +195,18 @@ enum AssignabilityTypeVisitor implements TypeVisitor<TypeVisitor<Boolean>> {
 
         @Override
         public Boolean visitWildcardType(WildcardType right) {
-            return Stream.of(left.getLowerBounds()).allMatch(b -> Stream.of(right.getLowerBounds()).allMatch(c -> Types.isAssignable(c, b)))
-                    && Stream.of(left.getUpperBounds()).allMatch(b -> Stream.of(right.getUpperBounds()).allMatch(c -> Types.isAssignable(b, c)));
+            return Stream.of(left.getLowerBounds()).allMatch(b -> Stream.of(right.getLowerBounds()).allMatch(c -> isAssignable(c, b)))
+                    && Stream.of(left.getUpperBounds()).allMatch(b -> Stream.of(right.getUpperBounds()).allMatch(c -> isAssignable(b, c)));
         }
 
         @Override
         public <D extends GenericDeclaration> Boolean visitTypeVariable(TypeVariable<D> right) {
-            return Stream.of(left.getLowerBounds()).allMatch(b -> Stream.of(right.getBounds()).allMatch(c -> Types.isAssignable(b, c)))
-                    && Stream.of(left.getUpperBounds()).allMatch(b -> Stream.of(right.getBounds()).allMatch(c -> Types.isAssignable(c, b)));
+            return Stream.of(left.getLowerBounds()).allMatch(b -> Stream.of(right.getBounds()).allMatch(c -> isAssignable(b, c)))
+                    && Stream.of(left.getUpperBounds()).allMatch(b -> Stream.of(right.getBounds()).allMatch(c -> isAssignable(c, b)));
         }
     }
 
-    private static class TypeVariableAssignabilityTypeVisitor<K extends GenericDeclaration> implements TypeVisitor<Boolean> {
+    private class TypeVariableAssignabilityTypeVisitor<K extends GenericDeclaration> implements TypeVisitor<Boolean> {
 
         private final TypeVariable<K> left;
 
@@ -171,21 +216,26 @@ enum AssignabilityTypeVisitor implements TypeVisitor<TypeVisitor<Boolean>> {
 
         @Override
         public <T> Boolean visitClass(Class<T> right) {
+            Type captured = captures.get(left);
+            if (captured != null) {
+                return right.equals(captured);
+            }
+            captures.put(left, right);
+            return Stream.of(left.getBounds()).allMatch(b -> isAssignable(b, right));
+        }
+
+        @Override
+        public Boolean visitGenericArrayType(GenericArrayType right) {
             return false;
         }
 
         @Override
-        public Boolean visitGenericArrayType(GenericArrayType genericArrayType) {
+        public Boolean visitWildcardType(WildcardType right) {
             return false;
         }
 
         @Override
-        public Boolean visitWildcardType(WildcardType wildcardType) {
-            return false;
-        }
-
-        @Override
-        public Boolean visitParameterizedType(ParameterizedType parameterizedType) {
+        public Boolean visitParameterizedType(ParameterizedType right) {
             return false;
         }
 
@@ -195,30 +245,5 @@ enum AssignabilityTypeVisitor implements TypeVisitor<TypeVisitor<Boolean>> {
                     && left.getGenericDeclaration().equals(right.getGenericDeclaration())
                     || Stream.of(right.getBounds()).allMatch(t -> TypeVisitor.accept(this, t));
         }
-    }
-
-    @Override
-    public <T> TypeVisitor<Boolean> visitClass(Class<T> left) {
-        return new ClassAssignabilityTypeVisitor<>(left);
-    }
-
-    @Override
-    public TypeVisitor<Boolean> visitParameterizedType(ParameterizedType left) {
-        return new ParameterizedTypeAssignabilityTypeVisitor(left);
-    }
-
-    @Override
-    public TypeVisitor<Boolean> visitGenericArrayType(GenericArrayType left) {
-        return new GenericArrayTypeAssignabilityTypeVisitor(left);
-    }
-
-    @Override
-    public TypeVisitor<Boolean> visitWildcardType(WildcardType left) {
-        return new WildcardTypeAssignabilityTypeVisitor(left);
-    }
-
-    @Override
-    public <D extends GenericDeclaration> TypeVisitor<Boolean> visitTypeVariable(TypeVariable<D> left) {
-        return new TypeVariableAssignabilityTypeVisitor<>(left);
     }
 }

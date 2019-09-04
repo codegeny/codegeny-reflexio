@@ -25,6 +25,26 @@ Types.resolveTypeArguments(UUIDStringConverter.class, Converter.class); // yield
 
 For the last example (`UUIDStringConverter`), nowhere in its hierarchy is a type directly implementing
 `Converter<UUID, String>` but the method is capable of reconstructing that information.
+
+## java.lang.reflect.Type assignabilty
+
+Assignability checking can be done with or without _capturing_ `TypeVariable`s.
+Assignability _with_ capturing should only be used if you need to check assignability to a method/constructor
+parameter which is templated.
+
+```java
+class MyClass {
+    public <S extends CharSequence & Serializable> void doSomething(S text) {}
+}
+
+Type left = MyClass.class.getDeclaredMethod("doSomething", CharSequence.class).getGenericParameterTypes[0]; // S
+Type right = String.class;
+
+Types.isAssignable(left, right); // return false (not capturing)
+
+Map<TypeVariable<?>, Type> captures = new HashMap<>();
+Types.isAssignable(left, right, captures); // return true with ("S", String.class) added to the map
+```
     
 ## java.lang.reflect.Type parsing
 
