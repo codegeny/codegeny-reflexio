@@ -35,6 +35,6 @@ public class RawClassResolverTest {
 
     @Test
     public void test2() throws ClassNotFoundException {
-        Assertions.assertEquals(Set[][][].class, Types.raw(TypeParser.newInstance().parseType("java.util.Set<?>[][][]")));
+        Assertions.assertEquals(Set[][][].class, Types.raw(Types.parseType("java.util.Set<?>[][][]")));
     }
 }

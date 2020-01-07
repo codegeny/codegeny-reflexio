@@ -9,35 +9,35 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
-import java.net.Proxy;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.util.Scanner;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+/**
+ * Collection of static utility methods for java Types.
+ *
+ * @author Xavier DURY
+ */
 public final class Types {
 
+    /**
+     * Map primitive -> wrapper.
+     */
     private static final Map<Class<?>, Class<?>> PRIMITIVE_TO_WRAPPER;
 
-    static {
-        Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
-        primitiveToWrapper.put(boolean.class, Boolean.class);
-        primitiveToWrapper.put(char.class, Character.class);
-        primitiveToWrapper.put(byte.class, Byte.class);
-        primitiveToWrapper.put(short.class, Short.class);
-        primitiveToWrapper.put(int.class, Integer.class);
-        primitiveToWrapper.put(long.class, Long.class);
-        primitiveToWrapper.put(float.class, Float.class);
-        primitiveToWrapper.put(double.class, Double.class);
-        primitiveToWrapper.put(void.class, Void.class);
-        PRIMITIVE_TO_WRAPPER = Collections.unmodifiableMap(primitiveToWrapper);
-    }
-
+    /**
+     * Convert a primitive to its wrapper if needed.
+     *
+     * @param type The type to wrap.
+     * @return The wrapped type (or the original type if it was not primitive).
+     */
     public static Class<?> primitiveToWrapper(Class<?> type) {
         return PRIMITIVE_TO_WRAPPER.getOrDefault(type, type);
     }
@@ -75,15 +75,41 @@ public final class Types {
         return AnnotatedElementVisitor.accept(new CollectAnnotationsElementVisitor<>(annotationType), element);
     }
 
+    /**
+     * Check if the right type is assignable to the left type (left := right). If any of the types contains
+     * TypeVariables, this method will always return false.
+     *
+     * @param left  The left type.
+     * @param right The right type.
+     * @return True if the right is assignable to left.
+     */
     public static boolean isAssignable(Type left, Type right) {
         Map<TypeVariable<?>, Type> captures = new HashMap<>();
         return isAssignable(left, right, captures) && captures.isEmpty();
     }
 
+    /**
+     * Check if the right type is assignable to the left type (left := right).
+     * If Set[E] is checked against Set[String] and the map does not contains [E], this method will
+     * return true with ([E] => String) added to the map.
+     * If Set[E] is checked against Set[String] and the map already contains a key [E], this method will
+     * return true only if the value for the key [E] is assignable to String.
+     *
+     * @param left     The left type.
+     * @param right    The right type.
+     * @param captures A map which already contains captures or into which new captures will be added.
+     * @return True if the right is assignable to left.
+     */
     public static boolean isAssignable(Type left, Type right, Map<TypeVariable<?>, Type> captures) {
         return Boolean.TRUE.equals(TypeVisitor.accept(new AssignabilityTypeVisitor(right, captures), left));
     }
 
+    /**
+     * Determine the raw Class from a Type.
+     *
+     * @param type The type.
+     * @return The class.
+     */
     public static Class<?> raw(Type type) {
         return TypeVisitor.accept(RawClassResolver.INSTANCE, type);
     }
@@ -160,6 +186,13 @@ public final class Types {
         }
     }
 
+    /**
+     * Convert the given component type to an array type.
+     * A rank 0 returns the component as is, a rank 1 returns a component[], a rank 2 returns a component[][]...
+     *
+     * @param component The component type.
+     * @return An array type of the given component type.
+     */
     public static Type arrayType(Type component) {
         return arrayType(component, 1);
     }
@@ -205,142 +238,99 @@ public final class Types {
         return new WildcardTypeImpl(lowerBounds, upperBounds);
     }
 
-    public static final WildcardType WILDCARD = newWildcardType(new Type[0], new Type[0]);
-
-    private static class WildcardTypeImpl implements WildcardType {
-
-        private static final Type[] DEFAULT_UPPER_BOUNDS = new Type[]{Object.class};
-
-        private final Type[] lowerBounds;
-        private final Type[] upperBounds;
-
-        WildcardTypeImpl(Type[] lowerBounds, Type[] upperBounds) {
-            this.lowerBounds = Objects.requireNonNull(lowerBounds);
-            this.upperBounds = Objects.requireNonNull(upperBounds);
-        }
-
-        @Override
-        public Type[] getUpperBounds() {
-            return upperBounds.length == 0 ? DEFAULT_UPPER_BOUNDS : upperBounds;
-        }
-
-        @Override
-        public Type[] getLowerBounds() {
-            return lowerBounds;
-        }
-
-        @Override
-        public boolean equals(Object that) {
-            return super.equals(that) || that instanceof WildcardType && equals((WildcardType) that);
-        }
-
-        private boolean equals(WildcardType that) {
-            return Arrays.equals(getLowerBounds(), that.getLowerBounds()) && Arrays.equals(getUpperBounds(), that.getUpperBounds());
-        }
-
-        @Override
-        public int hashCode() {
-            return Arrays.hashCode(getLowerBounds()) ^ Arrays.hashCode(getUpperBounds());
-        }
-
-        @Override
-        public String toString() {
-            StringBuilder builder = new StringBuilder("?");
-            if (lowerBounds.length > 0) {
-                builder.append(" super ").append(Stream.of(lowerBounds).map(Type::getTypeName).collect(Collectors.joining(", ")));
-            }
-            if (upperBounds.length > 0 && !Arrays.equals(upperBounds, DEFAULT_UPPER_BOUNDS)) {
-                builder.append(" extends ").append(Stream.of(upperBounds).map(Type::getTypeName).collect(Collectors.joining(", ")));
-            }
-            return builder.toString();
-        }
-    }
-
-    private static class ParameterizedTypeImpl implements ParameterizedType {
-
-        private final Type rawType;
-        private final Type ownerType;
-        private final Type[] arguments;
-
-        ParameterizedTypeImpl(Type rawType, Type ownerType, Type... arguments) {
-            this.rawType = Objects.requireNonNull(rawType);
-            this.ownerType = ownerType;
-            this.arguments = Objects.requireNonNull(arguments);
-        }
-
-        @Override
-        public Type getRawType() {
-            return rawType;
-        }
-
-        @Override
-        public Type getOwnerType() {
-            return ownerType;
-        }
-
-        @Override
-        public Type[] getActualTypeArguments() {
-            return arguments;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hashCode(rawType)
-                    ^ Objects.hashCode(ownerType)
-                    ^ Arrays.hashCode(arguments);
-        }
-
-        @Override
-        public boolean equals(Object that) {
-            return super.equals(that) || that instanceof ParameterizedType && equals((ParameterizedType) that);
-        }
-
-        private boolean equals(ParameterizedType that) {
-            return Objects.equals(rawType, that.getRawType())
-                    && Objects.equals(ownerType, that.getOwnerType())
-                    && Arrays.equals(arguments, that.getActualTypeArguments());
-        }
-
-        @Override
-        public String toString() {
-            return rawType.getTypeName().concat(Stream.of(getActualTypeArguments()).map(Type::getTypeName).collect(Collectors.joining(", ", "<", ">")));
-        }
-    }
-
-    private static class GenericArrayTypeImpl implements GenericArrayType {
-
-        private final Type component;
-
-        GenericArrayTypeImpl(Type component) {
-            this.component = Objects.requireNonNull(component);
-        }
-
-        @Override
-        public Type getGenericComponentType() {
-            return component;
-        }
-
-        @Override
-        public boolean equals(Object that) {
-            return super.equals(that) || that instanceof GenericArrayType && equals((GenericArrayType) that);
-        }
-
-        private boolean equals(GenericArrayType that) {
-            return Objects.equals(component, that.getGenericComponentType());
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hashCode(component);
-        }
-
-        @Override
-        public String toString() {
-            return component.getTypeName().concat("[]");
-        }
-    }
+    private static final Type[] EMPTY_TYPE_ARRAY = new Type[0];
+    public static final WildcardType WILDCARD;
 
     private Types() {
         throw new InternalError();
+    }
+
+    public static Type parseType(String typeName) throws ClassNotFoundException {
+        return parseType(typeName, Thread.currentThread().getContextClassLoader());
+    }
+
+    public static Type parseType(String typeName, ClassLoader classLoader) throws ClassNotFoundException {
+        try (Scanner scanner = new Scanner(typeName)) {
+            return parseType(scanner, classLoader);
+        }
+    }
+
+    private static Type parseType(Scanner scanner, ClassLoader classLoader) throws ClassNotFoundException {
+        if (!Token.TYPE_NAME.matches(scanner)) {
+            throw new IllegalArgumentException("Expected type name in " + scanner);
+        }
+        return parseArrayType(parseParameterizedType(Types.loadClass(scanner.match().group(1), classLoader), scanner, classLoader), scanner);
+    }
+
+    private static Type parseWildcardType(Scanner scanner, ClassLoader classLoader) throws ClassNotFoundException {
+        if (!Token.WILDCARD.matches(scanner)) {
+            return parseType(scanner, classLoader);
+        }
+        if (Token.EXTENDS.matches(scanner)) {
+            return newWildcardType(EMPTY_TYPE_ARRAY, new Type[]{parseType(scanner, classLoader)});
+        }
+        if (Token.SUPER.matches(scanner)) {
+            return newWildcardType(new Type[]{parseType(scanner, classLoader)}, EMPTY_TYPE_ARRAY);
+        }
+        return newWildcardType(EMPTY_TYPE_ARRAY, EMPTY_TYPE_ARRAY);
+    }
+
+    private static Type parseParameterizedType(Type type, Scanner scanner, ClassLoader classLoader) throws ClassNotFoundException {
+        if (!Token.LEFT_ANGLE_BRACKET.matches(scanner)) {
+            return type;
+        }
+        Collection<Type> types = new LinkedList<>();
+        do {
+            types.add(parseWildcardType(scanner, classLoader));
+        } while (Token.COMMA.matches(scanner));
+        if (!Token.RIGHT_ANGLE_BRACKET.matches(scanner)) {
+            throw new IllegalArgumentException("Expected '>' in " + scanner);
+        }
+        return newParameterizedType(type, null, types.toArray(EMPTY_TYPE_ARRAY));
+    }
+
+    private static Type parseArrayType(Type type, Scanner scanner) {
+        int rank = 0;
+        while (Token.ARRAY_SQUARE_BRACKETS.matches(scanner)) {
+            rank++;
+        }
+        return arrayType(type, rank);
+    }
+
+    private enum Token {
+
+        TYPE_NAME("([._$a-zA-Z0-9]+)"),
+        LEFT_ANGLE_BRACKET("<"),
+        RIGHT_ANGLE_BRACKET(">"),
+        COMMA(","),
+        ARRAY_SQUARE_BRACKETS("\\[\\s*]"),
+        WILDCARD("\\?"),
+        EXTENDS("extends"),
+        SUPER("super");
+
+        private final Pattern pattern;
+
+        Token(String regex) {
+            pattern = Pattern.compile("\\G\\s*" + regex);
+        }
+
+        boolean matches(Scanner scanner) {
+            return scanner.findWithinHorizon(pattern, 0) != null;
+        }
+    }
+
+    static {
+        Map<Class<?>, Class<?>> primitiveToWrapper = new HashMap<>();
+        primitiveToWrapper.put(boolean.class, Boolean.class);
+        primitiveToWrapper.put(char.class, Character.class);
+        primitiveToWrapper.put(byte.class, Byte.class);
+        primitiveToWrapper.put(short.class, Short.class);
+        primitiveToWrapper.put(int.class, Integer.class);
+        primitiveToWrapper.put(long.class, Long.class);
+        primitiveToWrapper.put(float.class, Float.class);
+        primitiveToWrapper.put(double.class, Double.class);
+        primitiveToWrapper.put(void.class, Void.class);
+        PRIMITIVE_TO_WRAPPER = Collections.unmodifiableMap(primitiveToWrapper);
+        WILDCARD = newWildcardType(EMPTY_TYPE_ARRAY, EMPTY_TYPE_ARRAY);
     }
 }

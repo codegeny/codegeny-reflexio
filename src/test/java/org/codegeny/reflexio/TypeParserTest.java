@@ -5,7 +5,10 @@ import org.junit.jupiter.api.Test;
 
 public class TypeParserTest {
 
-    private final TypeParser parser = TypeParser.newInstance();
+    @Test
+    public void otherTest() {
+        Assertions.assertEquals(Object[][][][].class, Types.arrayType(Object[][].class, 2));
+    }
 
     @Test
     public void test() throws ClassNotFoundException {
@@ -27,7 +30,7 @@ public class TypeParserTest {
     private void parse(String string) throws ClassNotFoundException {
         Assertions.assertEquals(
                 string.replaceAll("\\s+", ""),
-                parser.parseType(string).getTypeName().replaceAll("\\s+", "")
+                Types.parseType(string).getTypeName().replaceAll("\\s+", "")
         );
     }
 }
