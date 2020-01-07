@@ -49,8 +49,7 @@ Types.isAssignable(left, right, captures); // return true with ("S", String.clas
 ## java.lang.reflect.Type parsing
 
 ```java
-Type type = TypeParser.newInstance()
-  .parseType("java.util.Map<? extends java.lang.Number, java.util.Set<? super java.lang.CharSequence>>[]");
+Type type = Types.parseType("java.util.Map<? extends java.lang.Number, java.util.Set<? super java.lang.CharSequence>>[]");
 ```
 
 ## java.lang.reflect.Type literal
